@@ -17,48 +17,93 @@ interface ChatThread {
 interface ChatsScreenProps {
   chats: ChatThread[];
   onOpenChat: (chatId: number) => void;
+  onOpenProfile?: (author: string) => void;
 }
 
-export const ChatsScreen = ({ chats, onOpenChat }: ChatsScreenProps) => {
+export const ChatsScreen = ({ chats, onOpenChat, onOpenProfile }: ChatsScreenProps) => {
   const [activeFilter, setActiveFilter] = useState("All");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showNewChat, setShowNewChat] = useState(false);
 
-  const filteredThreads = chats.filter(chat => {
-    if (activeFilter === "All") return true;
-    if (activeFilter === "Unread") return chat.count > 0 || chat.dot;
-    if (activeFilter === "Groups") return chat.isGroup;
-    return true;
-  });
+  const filteredThreads = chats
+    .filter((chat) => {
+      if (activeFilter === "All") return true;
+      if (activeFilter === "Unread") return chat.count > 0 || chat.dot;
+      if (activeFilter === "Groups") return chat.isGroup;
+      return true;
+    })
+    .filter((chat) => {
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase();
+      return (`${chat.name} ${chat.text}`).toLowerCase().includes(query);
+    });
 
   return (
     <div className="space-y-4 pb-20 animate-fadeIn">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-black text-white">Chats</h2>
-        <div className="flex space-x-3.5">
-          <button className="p-2.5 bg-[#111625] rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
-            <Search size={16} className="text-slate-300" />
-          </button>
-          <button className="p-2.5 bg-[#111625] rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
-            <Edit size={16} className="text-slate-300" />
-          </button>
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-black text-white">Chats</h2>
+          <div className="flex space-x-3.5">
+            <button
+              onClick={() => {
+                setSearchOpen((prev) => !prev);
+                setShowNewChat(false);
+                if (searchOpen) setSearchQuery('');
+              }}
+              className="p-2.5 bg-[#111625] rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
+            >
+              <Search size={16} className="text-slate-300" />
+            </button>
+            <button
+              onClick={() => {
+                setShowNewChat((prev) => !prev);
+                setSearchOpen(false);
+                setSearchQuery('');
+              }}
+              className="p-2.5 bg-[#111625] rounded-xl border border-slate-800 hover:border-slate-700 transition-colors"
+            >
+              <Edit size={16} className="text-slate-300" />
+            </button>
+          </div>
         </div>
+        {searchOpen && (
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search chats..."
+            className="w-full rounded-3xl border border-slate-800 bg-[#111625] px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+          />
+        )}
+        {showNewChat && (
+          <div className="rounded-3xl border border-[#1A72FF] bg-[#0b1120]/95 p-3 text-sm text-slate-200">
+            <p className="font-black text-white">New chat</p>
+            <p className="mt-1 text-slate-400">Tap one of the active users below to open their chat directly.</p>
+          </div>
+        )}
       </div>
 
       {/* Lobby Active Scroller Row */}
       <div className="space-y-2">
         <div className="flex space-x-4 overflow-x-auto pb-1 scrollbar-none">
           {chats.map((friend: ChatThread) => (
-            <div key={friend.id} className="relative flex flex-col items-center space-y-1 flex-shrink-0 cursor-pointer group">
+            <button
+              key={friend.id}
+              type="button"
+              onClick={() => onOpenChat(friend.id)}
+              className="relative flex flex-col items-center space-y-1 flex-shrink-0 cursor-pointer group"
+            >
               <div className="p-[2.5px] rounded-full bg-gradient-to-tr from-[#1A72FF] to-[#00D2FF] group-hover:scale-105 transition-transform duration-300">
                 <div className={`w-11 h-11 rounded-full border-2 border-[#090C15] flex items-center justify-center font-black text-xs text-white bg-slate-800`}>
-                  {friend.letter || friend.name.charAt(0)}
+                  <span className="w-11 h-11 flex items-center justify-center">{friend.letter || friend.name.charAt(0)}</span>
                 </div>
               </div>
               {friend.online && (
                 <div className="absolute top-7 right-0.5 w-3 h-3 bg-emerald-500 border-2 border-[#090C15] rounded-full shadow-md" />
               )}
               <span className="text-[11px] text-slate-400 font-medium group-hover:text-slate-200 transition-colors">{friend.name.split(' ')[0]}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>

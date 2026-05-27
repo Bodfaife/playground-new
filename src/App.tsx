@@ -9,11 +9,12 @@ import { StoryViewerScreen } from './screens/StoryViewerScreen';
 import { ProfileEditScreen } from './screens/ProfileEditScreen';
 import { ChatDmScreen } from './screens/ChatDmScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { PostScreen } from './screens/PostScreen';
+import { PostScreen } from './screens';
 import { SystemNotificationScreen } from './screens/SystemNotificationScreen';
 
 type ScreenType = 'feed' | 'profile' | 'notifications' | 'chats' | 'create' | 'story' | 'editProfile' | 'chatRoom' | 'settings' | 'post' | 'system';
 type PostType = 'photo' | 'video' | 'tournament' | 'poll';
+type StoryReaction = '👍' | '❤️' | '😄' | '😢' | '🔥';
 
 type StoryItem = {
   id: number;
@@ -21,6 +22,9 @@ type StoryItem = {
   preview: string;
   caption: string;
   avatar: string | null;
+  views?: number;
+  reactions?: Record<string, number>;
+  viewers?: { name: string; reaction?: string }[];
 };
 
 type ChatThread = {
@@ -79,10 +83,10 @@ export default function App() {
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
   const [selectedSystem, setSelectedSystem] = useState<NotificationItem | null>(null);
   const [storyList, setStoryList] = useState<StoryItem[]>([
-    { id: 1, name: 'Zane', preview: 'https://images.unsplash.com/photo-1517832207067-4db24a2ae47c?auto=format&fit=crop&w=900&q=80', caption: 'Epic squad win tonight.', avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=80' },
-    { id: 2, name: 'Nova', preview: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=900&q=80', caption: 'Grinding rank all night.', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80' },
-    { id: 3, name: 'Kai', preview: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=900&q=80', caption: 'New build unlocked.', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80' },
-    { id: 4, name: 'Rogue', preview: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=900&q=80', caption: 'Next tournament hype.', avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=200&q=80' }
+    { id: 1, name: 'Zane', preview: 'https://images.unsplash.com/photo-1517832207067-4db24a2ae47c?auto=format&fit=crop&w=900&q=80', caption: 'Epic squad win tonight.', avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=80', views: 0, reactions: { '👍': 0, '❤️': 0, '😄': 0, '😢': 0, '🔥': 0 }, viewers: [] },
+    { id: 2, name: 'Nova', preview: 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=900&q=80', caption: 'Grinding rank all night.', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80', views: 0, reactions: { '👍': 0, '❤️': 0, '😄': 0, '😢': 0, '🔥': 0 }, viewers: [] },
+    { id: 3, name: 'Kai', preview: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=900&q=80', caption: 'New build unlocked.', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80', views: 0, reactions: { '👍': 0, '❤️': 0, '😄': 0, '😢': 0, '🔥': 0 }, viewers: [] },
+    { id: 4, name: 'Rogue', preview: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?auto=format&fit=crop&w=900&q=80', caption: 'Next tournament hype.', avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=200&q=80', views: 0, reactions: { '👍': 0, '❤️': 0, '😄': 0, '😢': 0, '🔥': 0 }, viewers: [] }
   ]);
 
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([
@@ -192,6 +196,14 @@ export default function App() {
   const nextPostId = useRef(3);
   const nextNotificationId = useRef(7);
 
+  const [mutedPostIds, setMutedPostIds] = useState<number[]>([]);
+  const [mutedAuthors, setMutedAuthors] = useState<{ author: string; expiresAt: number; label: string }[]>([]);
+  const [hiddenAuthors, setHiddenAuthors] = useState<string[]>([]);
+  const [muteAuthorRequest, setMuteAuthorRequest] = useState<string | null>(null);
+  const [commentOpenPostId, setCommentOpenPostId] = useState<number | null>(null);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const [previousScreen, setPreviousScreen] = useState<ScreenType>('feed');
+
   const [profileList] = useState([
     { id: 1, name: 'Kai', username: 'kaigamer', bio: 'New rank push incoming.', rank: 'Platinum I', hours: '1,200h', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80', profileLink: 'https://playground.app/kaigamer' }
   ]);
@@ -220,6 +232,13 @@ export default function App() {
     setShowPostMenu(false);
   };
 
+  const navigateBack = () => {
+    setActiveScreen(previousScreen);
+    if (['feed', 'profile', 'notifications', 'chats'].includes(previousScreen)) {
+      setMainTab(previousScreen as typeof mainTab);
+    }
+  };
+
   const handleOpenCreate = (type: PostType) => {
     setPostType(type);
     setActiveScreen('create');
@@ -227,8 +246,69 @@ export default function App() {
   };
 
   const handleOpenStory = (story: StoryItem) => {
+    handleViewStory(story.id);
     setSelectedStory(story);
     setActiveScreen('story');
+  };
+
+  const handleViewStory = (storyId: number) => {
+    setStoryList((prev) =>
+      prev.map((item) => {
+        if (item.id !== storyId) return item;
+        const currentViews = item.views ?? 0;
+        const viewerName = profileData.name;
+        const alreadyViewed = item.viewers?.some((viewer) => viewer.name === viewerName);
+        return {
+          ...item,
+          views: currentViews + (alreadyViewed ? 0 : 1),
+          viewers: item.viewers ? [...item.viewers, { name: viewerName }] : [{ name: viewerName }]
+        };
+      })
+    );
+  };
+
+  const handleReactToStory = (storyId: number, reaction: StoryReaction) => {
+    setStoryList((prev) =>
+      prev.map((item) => {
+        if (item.id !== storyId) return item;
+        const currentReactions: Record<StoryReaction, number> = item.reactions
+          ? { ...item.reactions as Record<StoryReaction, number> }
+          : { '👍': 0, '❤️': 0, '😄': 0, '😢': 0, '🔥': 0 };
+        const viewerName = profileData.name;
+        const existingViewer = item.viewers?.find((viewer) => viewer.name === viewerName);
+        const updatedViewers = item.viewers ? item.viewers.map((viewer) => viewer.name === viewerName ? { ...viewer, reaction } : viewer) : [];
+        if (!existingViewer) {
+          updatedViewers.push({ name: viewerName, reaction });
+        }
+        const previousReaction = existingViewer?.reaction as StoryReaction | undefined;
+        const updatedReactions: Record<StoryReaction, number> = { ...currentReactions };
+        if (previousReaction) {
+          updatedReactions[previousReaction] = Math.max(0, (updatedReactions[previousReaction] ?? 1) - 1);
+        }
+        updatedReactions[reaction] = (updatedReactions[reaction] ?? 0) + 1;
+        return {
+          ...item,
+          reactions: updatedReactions,
+          viewers: updatedViewers
+        };
+      })
+    );
+  };
+
+  const handleRequestMuteAuthor = (author: string) => {
+    setMuteAuthorRequest(author);
+  };
+
+  const handleConfirmMuteAuthor = (durationHours: number) => {
+    if (!muteAuthorRequest) return;
+    const expiresAt = Date.now() + durationHours * 60 * 60 * 1000;
+    setMutedAuthors((prev) => [...prev, { author: muteAuthorRequest, expiresAt, label: `${durationHours}h` }]);
+    setMuteAuthorRequest(null);
+  };
+
+  const cleanExpiredMuteAuthors = () => {
+    const now = Date.now();
+    setMutedAuthors((prev) => prev.filter((entry) => entry.expiresAt > now));
   };
 
   const handleOpenChat = (chatId: number) => {
@@ -286,6 +366,21 @@ export default function App() {
     );
   };
 
+  const handleAddComment = (postId: number, text: string) => {
+    setPostList((previous) =>
+      previous.map((item) => {
+        if (item.id !== postId) return item;
+        const nextId = item.commentsPreview ? item.commentsPreview.length + 1 : 1;
+        const newPreview = { id: Date.now() + nextId, author: profileData.name, text, time: 'Now' };
+        return {
+          ...item,
+          comments: item.comments + 1,
+          commentsPreview: item.commentsPreview ? [newPreview, ...item.commentsPreview] : [newPreview]
+        };
+      })
+    );
+  };
+
   const handleSharePost = (postId: number) => {
     const post = postList.find((item) => item.id === postId);
     if (!post) return;
@@ -297,6 +392,35 @@ export default function App() {
     );
 
     // Do not create notifications for the current user's own share action.
+  };
+
+  const handleMutePost = (postId: number) => {
+    setMutedPostIds((prev) => (prev.includes(postId) ? prev.filter((id) => id !== postId) : [...prev, postId]));
+  };
+
+  const handleMuteAuthor = (author: string) => {
+    setMutedAuthors((prev) =>
+      prev.some((entry) => entry.author === author)
+        ? prev.filter((entry) => entry.author !== author)
+        : [...prev, { author, expiresAt: Date.now() + 3600 * 1000, label: '1h' }]
+    );
+  };
+
+  const handleHideAuthor = (author: string) => {
+    setHiddenAuthors((prev) => (prev.includes(author) ? prev.filter((a) => a !== author) : [...prev, author]));
+  };
+
+  const handleOpenProfile = (author: string) => {
+    setPreviousScreen(activeScreen);
+    setProfileData((prev) => ({ ...prev, name: author, profileLink: `https://playground.app/${author.toLowerCase()}` }));
+    setMainTab('profile');
+    setActiveScreen('profile');
+  };
+
+  const handleShareProfile = () => {
+    navigator.clipboard.writeText(profileData.profileLink);
+    setShareToast('Profile link copied to clipboard');
+    window.setTimeout(() => setShareToast(null), 2000);
   };
 
   const handleSubmitPost = (type: string, content: string, mediaFiles: File[]) => {
@@ -319,7 +443,15 @@ export default function App() {
   };
 
   const handleOpenPost = (post: PostItem) => {
+    setPreviousScreen(activeScreen);
     setSelectedPostId(post.id);
+    setActiveScreen('post');
+  };
+
+  const handleOpenPostForComment = (postId: number) => {
+    setPreviousScreen(activeScreen);
+    setSelectedPostId(postId);
+    setCommentOpenPostId(postId);
     setActiveScreen('post');
   };
 
@@ -353,6 +485,7 @@ export default function App() {
       case 'post': {
         const post = postList.find((item) => item.id === target.postId);
         if (post) {
+          setPreviousScreen('notifications');
           setSelectedPostId(post.id);
           setActiveScreen('post');
         }
@@ -361,6 +494,7 @@ export default function App() {
       case 'profile': {
         const profile = profileList.find((item) => item.id === target.profileId);
         if (profile) {
+          setPreviousScreen('notifications');
           setProfileData(profile);
           setActiveScreen('profile');
           setMainTab('profile');
@@ -392,13 +526,16 @@ export default function App() {
   const selectedPost = selectedPostId ? postList.find((post) => post.id === selectedPostId) ?? null : null;
   const userPosts = postList.filter((post) => post.author === profileData.name);
 
+  const activeMutedAuthors = mutedAuthors.filter((entry) => entry.expiresAt > Date.now()).map((entry) => entry.author);
+  const visiblePosts = postList.filter((p) => !hiddenAuthors.includes(p.author) && !activeMutedAuthors.includes(p.author));
+
   const renderActiveScreen = () => {
     switch (activeScreen) {
       case 'feed':
         return (
           <FeedScreen
             stories={storyList}
-            posts={postList}
+            posts={visiblePosts}
             likedPostIds={likedPostIds}
             onNotificationNav={() => handleMainTab('notifications')}
             onCreatePost={() => handleOpenCreate('photo')}
@@ -407,8 +544,12 @@ export default function App() {
             onUploadStory={handleUploadStoryFiles}
             onOpenPost={handleOpenPost}
             onToggleLike={handleToggleLike}
-            onComment={handleCommentPost}
+            onComment={handleOpenPostForComment}
             onShare={handleSharePost}
+            onOpenProfile={handleOpenProfile}
+            onMutePost={handleMutePost}
+            onRequestMuteAuthor={handleRequestMuteAuthor}
+            onHideAuthor={handleHideAuthor}
           />
         );
       case 'profile':
@@ -416,9 +557,9 @@ export default function App() {
           <ProfileScreen
             profileData={profileData}
             userPosts={userPosts}
-            onBackClick={() => handleMainTab('feed')}
+            onBackClick={navigateBack}
             onEdit={() => setActiveScreen('editProfile')}
-            onShare={() => navigator.clipboard.writeText(profileData.profileLink)}
+            onShare={handleShareProfile}
             onOpenPost={handleOpenPost}
           />
         );
@@ -431,7 +572,7 @@ export default function App() {
           />
         );
       case 'chats':
-        return <ChatsScreen chats={chatThreads} onOpenChat={handleOpenChat} />;
+        return <ChatsScreen chats={chatThreads} onOpenChat={handleOpenChat} onOpenProfile={handleOpenProfile} />;
       case 'create':
         return (
           <CreatePostScreen
@@ -441,20 +582,23 @@ export default function App() {
           />
         );
       case 'story':
-        return selectedStory ? <StoryViewerScreen story={selectedStory} onBack={() => handleMainTab('feed')} /> : null;
+        return selectedStory ? <StoryViewerScreen story={storyList.find((item) => item.id === selectedStory.id) ?? selectedStory} currentUser={profileData.name} onBack={() => handleMainTab('feed')} onReact={(reaction: StoryReaction) => handleReactToStory(selectedStory.id, reaction)} /> : null;
       case 'editProfile':
         return <ProfileEditScreen profileData={profileData} onBack={() => setActiveScreen('profile')} onSave={handleSaveProfile} />;
       case 'chatRoom':
-        return selectedChat ? <ChatDmScreen chat={selectedChat} onBack={() => handleMainTab('chats')} onSendMessage={handleSendMessage} /> : null;
+        return selectedChat ? <ChatDmScreen chat={selectedChat} onBack={() => handleMainTab('chats')} onSendMessage={handleSendMessage} onOpenProfile={handleOpenProfile} /> : null;
       case 'post':
         return selectedPost ? (
           <PostScreen
             post={selectedPost}
             liked={likedPostIds.includes(selectedPost.id)}
-            onBack={() => handleMainTab('notifications')}
+            onBack={navigateBack}
             onToggleLike={() => handleToggleLike(selectedPost.id)}
             onComment={() => handleCommentPost(selectedPost.id)}
             onShare={() => handleSharePost(selectedPost.id)}
+            onAddComment={handleAddComment}
+            onOpenProfile={handleOpenProfile}
+            openComment={selectedPost && commentOpenPostId === selectedPost.id}
           />
         ) : null;
       case 'system':
@@ -468,9 +612,43 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#090C15] flex flex-col justify-between relative overflow-hidden font-sans selection:bg-[#1A72FF]/25 selection:text-white antialiased">
-      <div className="w-full max-w-md mx-auto px-5 pt-8 pb-24 min-h-screen flex flex-col justify-start relative z-10">
+      <div className="w-full max-w-md mx-auto px-5 pt-8 pb-24 min-h-screen flex flex-col justify-start relative z-10 scrollbar-none overflow-y-auto">
         {renderActiveScreen()}
       </div>
+
+      {muteAuthorRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-[#0b1118] p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-lg font-black text-white">Mute {muteAuthorRequest}'s posts</p>
+                <p className="mt-2 text-sm text-slate-400">Choose how long you want to mute this user's posts.</p>
+              </div>
+              <button onClick={() => setMuteAuthorRequest(null)} className="rounded-full border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-900/80">Cancel</button>
+            </div>
+            <div className="mt-6 grid grid-cols-3 gap-3">
+              {[1, 6, 8].map((hours) => (
+                <button
+                  key={hours}
+                  onClick={() => handleConfirmMuteAuthor(hours)}
+                  className="rounded-3xl border border-slate-700 bg-[#111625] px-4 py-3 text-sm font-black text-white hover:bg-slate-900 transition"
+                >
+                  {hours}h
+                </button>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-slate-500">Muted posts will be hidden for the selected duration.</p>
+          </div>
+        </div>
+      )}
+
+      {shareToast && (
+        <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2">
+          <div className="rounded-full border border-slate-700 bg-[#0f172a]/95 px-5 py-3 text-sm font-black text-white shadow-xl shadow-slate-900/30">
+            {shareToast}
+          </div>
+        </div>
+      )}
 
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 bg-blue-600/5 rounded-full blur-[100px] pointer-events-none z-0" />
       <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-purple-600/5 rounded-full blur-[90px] pointer-events-none z-0" />

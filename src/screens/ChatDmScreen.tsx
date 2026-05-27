@@ -18,9 +18,10 @@ interface ChatDmScreenProps {
   };
   onBack: () => void;
   onSendMessage: (chatId: number, text: string, attachment?: File | null) => void;
+  onOpenProfile?: (author: string) => void;
 }
 
-export const ChatDmScreen = ({ chat, onBack, onSendMessage }: ChatDmScreenProps) => {
+export const ChatDmScreen = ({ chat, onBack, onSendMessage, onOpenProfile }: ChatDmScreenProps) => {
   const [draft, setDraft] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +56,7 @@ export const ChatDmScreen = ({ chat, onBack, onSendMessage }: ChatDmScreenProps)
           <ArrowLeft size={18} />
         </button>
         <div className="flex items-center gap-3">
-          <img src={chat.avatar} alt={chat.name} className="w-11 h-11 rounded-full object-cover border border-slate-800" />
+          <img onClick={() => onOpenProfile?.(chat.name)} src={chat.avatar} alt={chat.name} className="w-11 h-11 rounded-full object-cover border border-slate-800 cursor-pointer" />
           <div>
             <p className="text-sm font-black text-white">{chat.name}</p>
             <p className="text-[11px] text-slate-500">Online</p>
@@ -64,21 +65,24 @@ export const ChatDmScreen = ({ chat, onBack, onSendMessage }: ChatDmScreenProps)
         <div className="w-10" />
       </div>
 
-      <div ref={messagesRef} className="flex-1 overflow-y-auto space-y-3 pt-1">
+      <div ref={messagesRef} className="flex-1 overflow-y-auto space-y-1 pt-1 pb-40 scrollbar-none">
         {chat.messages.map((message) => (
           <div key={message.id} className={`flex ${message.fromMe ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[75%] rounded-3xl p-4 text-sm ${message.fromMe ? 'bg-[#1A72FF]/15 text-white' : 'bg-[#111625] text-slate-200'}`}>
+            <div className={`max-w-[70%] rounded-2xl px-3 py-1.5 text-[12px] ${message.fromMe ? 'bg-[#1A72FF]/15 text-white' : 'bg-[#111625] text-slate-200'}`}>
               <p>{message.text}</p>
               {message.attachmentName && (
-                <p className="mt-2 text-[10px] text-slate-400">Attachment: {message.attachmentName}</p>
+                <p className="mt-1 text-[10px] text-slate-400">Attachment: {message.attachmentName}</p>
               )}
-              <p className="mt-2 text-[10px] text-slate-500 text-right">{message.time}</p>
+              <p className="mt-1 text-[10px] text-slate-500 text-right">{message.time}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pb-6 pt-4 border-t border-slate-900 z-50">
+      <div
+        className="fixed left-0 right-0 max-w-md mx-auto px-5 pb-6 pt-4 z-50"
+        style={{ bottom: '72px', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+      >
         {attachment && (
           <div className="mb-3 rounded-3xl border border-slate-800 bg-[#111625] px-4 py-3 text-sm text-slate-200 flex items-center justify-between gap-3">
             <span>{attachment.name}</span>

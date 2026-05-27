@@ -1,5 +1,5 @@
 import { Bell, Plus, MessageSquare, ThumbsUp, Share2, MoreHorizontal, Camera } from 'lucide-react';
-import { useRef, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 
 type StoryData = {
   id: number;
@@ -34,6 +34,10 @@ interface FeedScreenProps {
   onToggleLike: (postId: number) => void;
   onComment: (postId: number) => void;
   onShare: (postId: number) => void;
+  onOpenProfile?: (author: string) => void;
+  onMutePost?: (postId: number) => void;
+  onRequestMuteAuthor?: (author: string) => void;
+  onHideAuthor?: (author: string) => void;
 }
 
 export const FeedScreen = ({
@@ -48,9 +52,14 @@ export const FeedScreen = ({
   onOpenPost,
   onToggleLike,
   onComment,
-  onShare
+  onShare,
+  onOpenProfile,
+  onMutePost,
+  onRequestMuteAuthor,
+  onHideAuthor
 }: FeedScreenProps) => {
   const storyInputRef = useRef<HTMLInputElement>(null);
+  const [openMenuFor, setOpenMenuFor] = useState<number | null>(null);
   const placeholder = 'What did you do today, Zane?';
 
   const handleStorySelect = (event: ChangeEvent<HTMLInputElement>) => {
@@ -81,13 +90,13 @@ export const FeedScreen = ({
         >
           <div className="absolute inset-0 bg-slate-950/80" />
           <div className="h-2/3 flex items-center justify-center relative">
-            <span className="text-slate-400 font-black text-2xl">+</span>
-            <div className="absolute bottom-2 right-2 w-7 h-7 bg-[#1A72FF] rounded-full flex items-center justify-center text-white border-2 border-[#111625] shadow-md shadow-black">
+            {/* placeholder for preview area */}
+          </div>
+          <div className="h-1/3 bg-[#111625] flex items-center justify-center relative">
+            <span className="text-[10px] font-black tracking-tight text-slate-400">Your story</span>
+            <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-9 h-9 bg-[#1A72FF] rounded-full flex items-center justify-center text-white border-2 border-[#111625] shadow-md shadow-black">
               <Plus size={14} strokeWidth={3} />
             </div>
-          </div>
-          <div className="h-1/3 bg-[#111625] flex items-center justify-center">
-            <span className="text-[10px] font-black tracking-tight text-slate-400">Your story</span>
           </div>
         </button>
         <input
@@ -143,26 +152,35 @@ export const FeedScreen = ({
               <div className="flex justify-between items-start p-4">
                 <div className="flex items-center gap-3">
                   {post.avatar ? (
-                    <img src={post.avatar} alt={post.author} className="w-11 h-11 rounded-full object-cover border border-slate-800" />
+                    <img onClick={() => onOpenProfile?.(post.author)} src={post.avatar} alt={post.author} className="w-11 h-11 rounded-full object-cover border border-slate-800 cursor-pointer" />
                   ) : (
-                    <div className="w-11 h-11 rounded-full border border-slate-800 bg-slate-900 flex items-center justify-center text-sm font-black text-white">
+                    <div onClick={() => onOpenProfile?.(post.author)} className="w-11 h-11 rounded-full border border-slate-800 bg-slate-900 flex items-center justify-center text-sm font-black text-white cursor-pointer">
                       {post.author.charAt(0)}
                     </div>
                   )}
                   <div>
                     <h4 className="text-sm font-black text-white flex items-center gap-2">
-                      {post.author}
+                      <span className="cursor-pointer" onClick={() => onOpenProfile?.(post.author)}>{post.author}</span>
                       <span className="text-[#1A72FF] text-xs">✅</span>
                     </h4>
                     <p className="text-[11px] text-slate-500 uppercase tracking-wider">{post.time} • Playground</p>
                   </div>
                 </div>
-                <button className="text-slate-500 hover:text-slate-300 transition-colors">
-                  <MoreHorizontal size={20} />
-                </button>
+                <div className="relative">
+                  <button onClick={() => setOpenMenuFor(openMenuFor === post.id ? null : post.id)} className="text-slate-500 hover:text-slate-300 transition-colors">
+                    <MoreHorizontal size={20} />
+                  </button>
+                  {openMenuFor === post.id && (
+                    <div className="absolute right-0 top-8 w-48 rounded-2xl bg-[#0b1118] border border-slate-800 p-2 shadow-lg z-50">
+                      <button onClick={() => { onMutePost?.(post.id); setOpenMenuFor(null); }} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900 rounded-md">Mute post comments</button>
+                      <button onClick={() => { onRequestMuteAuthor?.(post.author); setOpenMenuFor(null); }} className="w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-900 rounded-md">Mute user's posts</button>
+                      <button onClick={() => { onHideAuthor?.(post.author); setOpenMenuFor(null); }} className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-slate-900 rounded-md">Remove user's posts</button>
+                    </div>
+                  )}
+                </div>
               </div>
               <button type="button" onClick={() => onOpenPost(post)} className="w-full text-left">
-                <p className="px-4 pb-3 text-sm text-slate-300 leading-relaxed">{post.caption}</p>
+                <p className="px-4 pb-3 text-sm text-slate-300 leading-relaxed">{renderTextWithMentions(post.caption)}</p>
                 <div className="w-full h-72 bg-cover bg-center" style={{ backgroundImage: `url(${post.media})` }} />
               </button>
               <div className="px-4 py-3 text-[11px] text-slate-400 uppercase tracking-[0.18em] font-black flex items-center justify-between">
@@ -196,4 +214,17 @@ export const FeedScreen = ({
       </div>
     </div>
   );
-};
+  function renderTextWithMentions(text: string): ReactNode {
+    const parts = text.split(/(@[\w]+)/g);
+    return (
+      <span>
+        {parts.map((part, index) =>
+          part.startsWith('@') ? (
+            <span key={index} className="text-[#1A72FF] font-black">{part}</span>
+          ) : (
+            <span key={index}>{part}</span>
+          )
+        )}
+      </span>
+    );
+  }};
